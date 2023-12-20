@@ -18,8 +18,8 @@ class Post(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     sector = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text, nullable=False)
-    image1 = db.Column(db.Text)  # Assuming base64 images are stored as text
-    image2 = db.Column(db.Text)  # Assuming base64 images are stored as text
+    image1 = db.Column(db.Text)  
+    image2 = db.Column(db.Text) 
     poster_username = db.Column(db.String(80), nullable=False)
     date = db.Column(db.DateTime, nullable=False)
     is_still_there = db.Column(db.Integer, default=0)
@@ -27,3 +27,15 @@ class Post(db.Model):
 
     def __repr__(self):
         return f'<Post {self.sector}>'
+    
+class Comment(db.Model):
+    __tablename__ = "comment"
+    
+    id = db.Column(db.Integer, primary_key=True)
+    post_id = db.Column(db.Integer, nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    poster_username = db.Column(db.String(80), nullable=False)
+    date = db.Column(db.DateTime, nullable=False)
+
+    def __repr__(self):
+        return f'<Comment {self.sector}>'

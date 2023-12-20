@@ -1,42 +1,13 @@
 from flask import (
-    Flask,
     render_template,
-    redirect,
-    flash,
-    url_for,
+    request,
     session,
     jsonify
 )
-
-from datetime import timedelta
-from sqlalchemy.exc import (
-    IntegrityError,
-    DataError,
-    DatabaseError,
-    InterfaceError,
-    InvalidRequestError,
-)
-from werkzeug.routing import BuildError
-
-
-from flask_bcrypt import Bcrypt,generate_password_hash, check_password_hash
-
-from flask_login import (
-    UserMixin,
-    login_user,
-    LoginManager,
-    current_user,
-    logout_user,
-    login_required,
-)
-
-from app import create_app,db,login_manager,bcrypt
-from models import User
-from forms import login_form,register_form
-
-@login_manager.user_loader
-def load_user(user_id):
-    return User.query.get(int(user_id))
+from datetime import datetime
+from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
+from app import create_app,db,bcrypt
+from models import User, Post, Comment
 
 app = create_app()
 
@@ -45,75 +16,154 @@ app = create_app()
 def index():
     return render_template("index.html",title="Home")
 
-# Login route
-@app.route("/login/", methods=("GET", "POST"), strict_slashes=False)
+@app.route("/login", methods=["POST"])
 def login():
-    form = login_form()
+    data = request.get_json()
+    email = data.get('email')
+    password = data.get('password')
 
-    if form.validate_on_submit():
-        try:
-            user = User.query.filter_by(email=form.email.data).first()
-            if check_password_hash(user.pwd, form.pwd.data):
-                login_user(user)
-                return redirect(url_for('index'))
-            else:
-                flash("Invalid Username or password!", "danger")
-        except Exception as e:
-            flash(e, "danger")
+    user = User.query.filter_by(email=email).first()
+    if user and bcrypt.check_password_hash(user.pwd, password):
+        access_token = create_access_token(identity=user.id)
+        return jsonify(access_token=access_token), 200
 
-    return render_template("auth.html",form=form)
+    return jsonify(message="Invalid credentials"), 401
 
-# Register route
-@app.route("/register/", methods=("GET", "POST"), strict_slashes=False)
+@app.route("/register", methods=["POST"])
 def register():
-    form = register_form()
+    data = request.get_json()
+    username = data.get('username')
+    email = data.get('email')
+    password = data.get('password')
 
-    if form.validate_on_submit():
-        try:
-            email = form.email.data
-            pwd = form.pwd.data
-            username = form.username.data
-            
-            newuser = User(
-                username=username,
-                email=email,
-                pwd=bcrypt.generate_password_hash(pwd),
-            )
-    
-            db.session.add(newuser)
-            db.session.commit()
-            flash(f"Account Succesfully created", "success")
-            return redirect(url_for("login"))
+    existing_user = User.query.filter_by(email=email).first()
+    if existing_user:
+        return jsonify(message="Email already registered"), 400
 
-        except Exception as e:
-            flash(e, "danger")
+    new_user = User(
+        username=username,
+        email=email,
+        pwd=bcrypt.generate_password_hash(password).decode('utf-8')
+    )
+    db.session.add(new_user)
+    db.session.commit()
 
-    return render_template("auth.html",form=form)
+    return jsonify(message="Registration successful"), 201
 
 @app.route("/users")
 def get_users():
-    # Get all users from the database
     users = User.query.all()
 
-    # Create a list of dictionaries representing user information
     user_list = [
         {
             'id': user.id,
             'username': user.username,
             'email': user.email,
-            # Add more fields if needed
         }
         for user in users
     ]
-
-    # Return the list of users as a JSON object
     return jsonify(users=user_list)
 
-@app.route("/logout")
-@login_required
-def logout():
-    logout_user()
-    return redirect(url_for('login'))
+@app.route("/posts", methods=["GET"])
+@jwt_required()
+def get_all_posts():
+    all_posts = Post.query.all()
+
+    posts_list = [
+        {
+            "id": post.id,
+            "sector": post.sector,
+            "description": post.description,
+            "image1": post.image1,
+            "image2": post.image2,
+            "poster_username": post.poster_username,
+            "date": post.date,
+        }
+        for post in all_posts
+    ]
+    return jsonify(posts=posts_list), 200
+
+@app.route("/posts", methods=["POST"])
+@jwt_required()
+def create_post():
+    data = request.get_json()
+    current_user_id = get_jwt_identity()
+    user = User.query.get(current_user_id)
+
+    if not user:
+        return jsonify(message="User not found"), 404
+    
+    new_post = Post(
+        sector=data.get('sector'),
+        description=data.get('description'),
+        image1=data.get('image1'),
+        image2=data.get('image2'),
+        poster_username=user.username,
+        date=datetime.now()
+    )
+    db.session.add(new_post)
+    db.session.commit()
+    return jsonify(message="Post created successfully"), 201
+
+@app.route("/posts/<int:post_id>", methods=["DELETE"])
+def delete_post(post_id):
+    post = Post.query.get_or_404(post_id)
+    db.session.delete(post)
+    db.session.commit()
+    return jsonify(message="Post deleted successfully"), 200
+
+@app.route("/posts/<int:post_id>/is_still_there", methods=["PATCH"])
+def increment_is_still_there(post_id):
+    post = Post.query.get_or_404(post_id)
+    post.is_still_there += 1
+    db.session.commit()
+    return jsonify(message="is_still_there incremented successfully"), 200
+
+@app.route("/posts/<int:post_id>/is_no_longer_there", methods=["PATCH"])
+def increment_is_no_longer_there(post_id):
+    post = Post.query.get_or_404(post_id)
+    post.is_no_longer_there += 1
+    db.session.commit()
+    return jsonify(message="is_no_longer_there incremented successfully"), 200
+
+@app.route("/comments/<int:post_id>", methods=["POST"])
+@jwt_required()
+def create_comment(post_id):
+    data = request.get_json()
+    current_user_id = get_jwt_identity()
+    user = User.query.get(current_user_id)
+
+    if not user:
+        return jsonify(message="User not found"), 404
+    
+    new_comment = Comment(
+        content = data.get('content'),
+        post_id = post_id,
+        date=datetime.now(),
+        poster_username=user.username
+    )
+    db.session.add(new_comment)
+    db.session.commit()
+    return jsonify(message="Comment created successfully")
+
+@app.route("/comments/<int:post_id>", methods=["GET"])
+def get_comments_by_post_id(post_id):
+    comments = Comment.query.filter_by(post_id=post_id).all()
+
+    if not comments:
+        return jsonify(message="No comments found for this post"), 404
+
+    comments_list = [
+        {
+            'id': comment.id,
+            'post_id': comment.post_id,
+            'content': comment.content,
+            'poster_username': comment.poster_username,
+            'date': comment.date.strftime("%Y-%m-%d %H:%M:%S")
+        }
+        for comment in comments
+    ]
+    return jsonify(comments=comments_list)
  
 if __name__ == "__main__":
     app.run(debug=True)
