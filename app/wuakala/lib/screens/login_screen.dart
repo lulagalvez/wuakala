@@ -2,6 +2,9 @@ import 'package:wuakala/screens/list_wuakalas.dart';
 import 'package:flutter/material.dart';
 import 'package:wuakala/users.dart';
 import 'package:wc_form_validators/wc_form_validators.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 
 class MyFormLogin extends StatefulWidget {
   const MyFormLogin({super.key});
@@ -111,39 +114,60 @@ class _MyFormState extends State<MyFormLogin> {
     );
   }
 
-  void _handleLogin(BuildContext context) {
+  void _handleLogin(BuildContext context) async {
     String username = _loginUsernameController.text;
     String password = _loginPasswordController.text;
     if (_formKey.currentState!.validate()) {
-      if (_userRepository.authenticateUser(username, password)) {
-        //modificar logica api
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => listWuakalas(),
-          ),
-        );
-      } else {
-        showDialog(
-          context: context,
-          builder: (context) {
-            return AlertDialog(
-              title: const Text('Error'),
-              content: const Text(
-                  'Usuario o contraseña incorrectos. Por favor, inténtalo de nuevo.'),
-              actions: <Widget>[
-                Center(
-                  child: TextButton(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                    },
-                    child: const Text('OK'),
-                  ),
-                ),
-              ],
-            );
+      try {
+        var response = await http.post(
+          Uri.parse('http://10.0.2.2:5000/login'),
+          headers: <String, String>{
+            'Content-Type': 'application/json; charset=UTF-8',
           },
+          body: jsonEncode(
+              <String, String>{"email": username, "password": password}),
         );
+
+        if (response.statusCode == 200) {
+          Map<String, dynamic> jsonResponse = json.decode(response.body);
+          var accessToken = jsonResponse['access_token'];
+
+          SharedPreferences prefs = await SharedPreferences.getInstance();
+          await prefs.setString('access_token', accessToken);
+          // ignore: use_build_context_synchronously
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const listWuakalas(),
+            ),
+          );
+        } else {
+          // ignore: use_build_context_synchronously
+          showDialog(
+            // Display an error dialog
+            context: context,
+            builder: (context) {
+              return AlertDialog(
+                title: const Text('Error'),
+                content: const Text(
+                    'Usuario o contraseña incorrectos. Por favor, inténtalo de nuevo.'),
+                actions: <Widget>[
+                  Center(
+                    child: TextButton(
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                      },
+                      child: const Text('OK'),
+                    ),
+                  ),
+                ],
+              );
+            },
+          );
+        }
+      } catch (error) {
+        // Handle any potential network or other errors
+        print('Error occurred: $error');
       }
     }
     _formKey.currentState?.reset();
