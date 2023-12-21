@@ -11,11 +11,6 @@ from models import User, Post, Comment
 
 app = create_app()
 
-# Home route
-@app.route("/", methods=("GET", "POST"), strict_slashes=False)
-def index():
-    return render_template("index.html",title="Home")
-
 @app.route("/login", methods=["POST"])
 def login():
     data = request.get_json()
