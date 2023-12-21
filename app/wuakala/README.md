@@ -1,3 +1,3 @@
-# wuakala
+# checklist
 
 A new Flutter project.
