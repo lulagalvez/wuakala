@@ -53,7 +53,7 @@ class _viewDetailsState extends State<viewDetails> {
         var headers = <String, String>{
           'Content-Type': 'application/json; charset=UTF-8',
           'Authorization': 'Bearer $accessToken',
-          'Connection': 'Keep-Alive:',
+          'Connection': 'Keep-Alive',
           'Keep-Alive': 'timeout=600, max=1000',
         };
 
@@ -156,8 +156,17 @@ class _viewDetailsState extends State<viewDetails> {
 
   Future<void> _getPostDetails() async {
     try {
+      var headers = <String, String>{
+        'Connection': 'Keep-Alive',
+        'Keep-Alive': 'timeout=600, max=1000',
+      };
       var response = await http
-          .get(Uri.parse('http://10.0.2.2:5000/posts/${widget.report}'));
+          .get(
+            Uri.parse('http://10.0.2.2:5000/posts/${widget.report}'),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 10));
+      ;
 
       if (response.statusCode == 200) {
         Map<String, dynamic> responseData = json.decode(response.body);
