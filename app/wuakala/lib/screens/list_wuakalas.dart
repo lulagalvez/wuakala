@@ -1,33 +1,68 @@
 import 'package:wuakala/screens/new_report.dart';
 import 'package:wuakala/screens/view_details.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:intl/intl.dart';
 
 // ignore: camel_case_types
 
 class Report {
-  //modificar logica por api
-  final String place;
-  final String author;
+  final int id;
+  final String sector;
+  final String posterUsername;
   final DateTime date;
-  Report({required this.place, required this.author, required this.date});
+
+  Report({
+    required this.id,
+    required this.sector,
+    required this.posterUsername,
+    required this.date,
+  });
 }
 
 // ignore: camel_case_types
 class listWuakalas extends StatefulWidget {
-  const listWuakalas({super.key});
+  const listWuakalas({Key? key}) : super(key: key);
 
   @override
-  // ignore: library_private_types_in_public_api
   _listWuakalasState createState() => _listWuakalasState();
 }
 
 // ignore: camel_case_types
 class _listWuakalasState extends State<listWuakalas> {
-  List<Report> reports = [
-    //modificar logica por api
-    Report(place: 'Place1', author: 'Autor1', date: DateTime.now()),
-    Report(place: 'Place2', author: 'Autor2', date: DateTime.now()),
-  ];
+  List<Report> reports = [];
+
+  @override
+  void initState() {
+    super.initState();
+    fetchWuakalas();
+  }
+
+  Future<void> fetchWuakalas() async {
+    try {
+      final response = await http.get(Uri.parse('http://10.0.2.2:5000/posts'));
+      if (response.statusCode == 200) {
+        final List<dynamic> postsJson = json.decode(response.body)['posts'];
+        setState(() {
+          reports = postsJson
+              .map((json) => Report(
+                    id: json['id'],
+                    sector: json['sector'],
+                    posterUsername: json['poster_username'],
+                    date: DateFormat("EEE, dd MMM yyyy HH:mm:ss 'GMT'")
+                        .parse(json['date']),
+                  ))
+              .toList();
+        });
+      } else {
+        print('Failed to load wuakalas: ${response.statusCode}');
+      }
+    } catch (error) {
+      print('Error occurred: $error');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -35,18 +70,17 @@ class _listWuakalasState extends State<listWuakalas> {
         title: const Text('Listado de Wuakalas'),
       ),
       body: ListView.builder(
-        itemCount: reports.length, //modificar logica api
+        itemCount: reports.length,
         itemBuilder: (context, index) {
           return ListTile(
-            title: Text(reports[index].place), //modificar logica api
+            title: Text(reports[index].sector),
             subtitle: Text(
-                'por @${reports[index].author} - ${reports[index].date}'), //modificar logica api
+                'por @${reports[index].posterUsername} - ${reports[index].date}'),
             onTap: () {
-              // Navegar a la pantalla de detalles al tocar un elemento
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => viewDetails(), //modificar logica api
+                  builder: (context) => viewDetails(report: reports[index].id),
                 ),
               );
             },
@@ -54,11 +88,12 @@ class _listWuakalasState extends State<listWuakalas> {
         },
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
+        onPressed: () async {
           //modificar logica api
-          Navigator.of(context).push(
+          await Navigator.of(context).push(
             MaterialPageRoute(builder: (context) => const newReport()),
           );
+          fetchWuakalas();
         },
         child: const Icon(Icons.add),
       ),

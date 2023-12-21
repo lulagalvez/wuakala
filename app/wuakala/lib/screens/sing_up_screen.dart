@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:wuakala/users.dart';
 import 'package:wc_form_validators/wc_form_validators.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class MyFormSingUp extends StatefulWidget {
   const MyFormSingUp({super.key});
@@ -19,7 +21,7 @@ class _MyFormState extends State<MyFormSingUp> {
       TextEditingController();
   final TextEditingController _signupConfirmPasswordController =
       TextEditingController();
-  final TextEditingController _signupNameController = TextEditingController();
+  final TextEditingController _signupEmailController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   // ignore: prefer_final_fields
   bool _isPasswordVisible = false, _isConfirmPasswordVisible = false;
@@ -45,13 +47,12 @@ class _MyFormState extends State<MyFormSingUp> {
             child: Column(
               children: <Widget>[
                 TextFormField(
-                  controller: _signupUsernameController,
+                  controller: _signupEmailController,
                   decoration: const InputDecoration(
-                      labelText: 'Usuario', hintText: 'Ej: Example1'),
+                      labelText: 'Email', hintText: 'Ej: example1@adress.com'),
                   validator: Validators.compose([
-                    Validators.required('Nombre de usuario requerido'),
-                    Validators.patternRegExp(
-                        RegExp(r'^[0-9a-zA-Z]+$'), 'Nombre de usuario inválido')
+                    Validators.required('Email requerido'),
+                    Validators.email('Email en formato incorrecto')
                   ]),
                 ),
                 const SizedBox(
@@ -108,7 +109,7 @@ class _MyFormState extends State<MyFormSingUp> {
                   height: 10,
                 ),
                 TextFormField(
-                    controller: _signupNameController,
+                    controller: _signupUsernameController,
                     decoration: const InputDecoration(labelText: 'Nombre'),
                     validator: Validators.required('Nombre requerido')),
                 const SizedBox(height: 10),
@@ -126,22 +127,34 @@ class _MyFormState extends State<MyFormSingUp> {
     );
   }
 
-  void _handleSignup(BuildContext context) {
+  void _handleSignup(BuildContext context) async {
     if (_formKey.currentState!.validate()) {
       String username = _signupUsernameController.text;
       String password = _signupPasswordController.text;
-      String confirmPassword = _signupConfirmPasswordController.text;
-      String name = _signupNameController.text;
-      if (password == confirmPassword) {
-        if (!_userRepository.isUsernameTaken(username)) {
-          //modificar logica api
-          _userRepository.registerUser(username, password, name);
+      String email = _signupEmailController.text;
+
+      try {
+        var url = Uri.parse('http://10.0.2.2:5000/register');
+        var response = await http.post(
+          url,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'username': username,
+            'email': email, // Assuming email and username are the same
+            'password': password,
+          }),
+        );
+
+        if (response.statusCode == 201) {
+          // Registration successful
+          // ignore: use_build_context_synchronously
           showDialog(
             context: context,
             builder: (context) {
               return AlertDialog(
                 title: const Text('Registro Exitoso'),
-                content: Text('¡Bienvenido, $name! Tu cuenta ha sido creada.'),
+                content:
+                    Text('¡Bienvenido, $username! Tu cuenta ha sido creada.'),
                 actions: <Widget>[
                   Center(
                     child: TextButton(
@@ -156,14 +169,62 @@ class _MyFormState extends State<MyFormSingUp> {
               );
             },
           );
+        } else if (response.statusCode == 400) {
+          // Email already registered
+          // ignore: use_build_context_synchronously
+          showDialog(
+            context: context,
+            builder: (context) {
+              return AlertDialog(
+                title: const Text('Error'),
+                content:
+                    const Text('El nombre de usuario ya se encuentra en uso.'),
+                actions: <Widget>[
+                  Center(
+                    child: TextButton(
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                      },
+                      child: const Text('OK'),
+                    ),
+                  ),
+                ],
+              );
+            },
+          );
+        } else if (response.statusCode == 401) {
+          // Email already registered
+          // ignore: use_build_context_synchronously
+          showDialog(
+            context: context,
+            builder: (context) {
+              return AlertDialog(
+                title: const Text('Error'),
+                content:
+                    const Text('El correo electrónico ya está registrado.'),
+                actions: <Widget>[
+                  Center(
+                    child: TextButton(
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                      },
+                      child: const Text('OK'),
+                    ),
+                  ),
+                ],
+              );
+            },
+          );
         } else {
+          // Other error occurred
+          // ignore: use_build_context_synchronously
           showDialog(
             context: context,
             builder: (context) {
               return AlertDialog(
                 title: const Text('Error'),
                 content: const Text(
-                    'El nombre de usuario ya está en uso. Por favor, elige otro.'),
+                    'Ocurrió un error al registrar. Por favor, inténtalo de nuevo.'),
                 actions: <Widget>[
                   Center(
                     child: TextButton(
@@ -178,27 +239,9 @@ class _MyFormState extends State<MyFormSingUp> {
             },
           );
         }
-      } else {
-        showDialog(
-          context: context,
-          builder: (context) {
-            return AlertDialog(
-              title: const Text('Error'),
-              content: const Text(
-                  'Las contraseñas no coinciden. Por favor, inténtalo de nuevo.'),
-              actions: <Widget>[
-                Center(
-                  child: TextButton(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                    },
-                    child: const Text('OK'),
-                  ),
-                ),
-              ],
-            );
-          },
-        );
+      } catch (error) {
+        print('Error occurred: $error');
+        // Handle other error scenarios
       }
     }
   }

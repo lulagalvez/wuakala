@@ -50,8 +50,11 @@ class _MyFormState extends State<MyFormLogin> {
                 ),
                 TextFormField(
                   controller: _loginUsernameController,
-                  decoration: const InputDecoration(labelText: 'Usuario'),
-                  validator: Validators.required('Nombre de usuario requerido'),
+                  decoration: const InputDecoration(labelText: 'Email'),
+                  validator: Validators.compose([
+                    Validators.email('Email en formato incorrecto'),
+                    Validators.required('Email requerido')
+                  ]),
                 ),
                 TextFormField(
                   controller: _loginPasswordController,
@@ -141,6 +144,8 @@ class _MyFormState extends State<MyFormLogin> {
               builder: (context) => const listWuakalas(),
             ),
           );
+          _loginPasswordController.clear();
+          _loginUsernameController.clear();
         } else {
           // ignore: use_build_context_synchronously
           showDialog(
@@ -150,7 +155,7 @@ class _MyFormState extends State<MyFormLogin> {
               return AlertDialog(
                 title: const Text('Error'),
                 content: const Text(
-                    'Usuario o contraseña incorrectos. Por favor, inténtalo de nuevo.'),
+                    'Email o contraseña incorrectos. Por favor, inténtalo de nuevo.'),
                 actions: <Widget>[
                   Center(
                     child: TextButton(
