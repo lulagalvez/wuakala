@@ -31,9 +31,13 @@ def register():
     email = data.get('email')
     password = data.get('password')
 
-    existing_user = User.query.filter_by(email=email).first()
+    existing_user = User.query.filter_by(username=username).first()
     if existing_user:
-        return jsonify(message="Email already registered"), 400
+        return jsonify(message="Usuario ya registrado"), 400
+    
+    existing_email = User.query.filter_by(email=email).first()
+    if existing_email:
+        return jsonify(message="Correo ya registrado"), 401
 
     new_user = User(
         username=username,
@@ -60,7 +64,6 @@ def get_users():
     return jsonify(users=user_list)
 
 @app.route("/posts", methods=["GET"])
-@jwt_required()
 def get_all_posts():
     all_posts = Post.query.all()
 
@@ -68,15 +71,32 @@ def get_all_posts():
         {
             "id": post.id,
             "sector": post.sector,
-            "description": post.description,
-            "image1": post.image1,
-            "image2": post.image2,
+            "description":post.description,
             "poster_username": post.poster_username,
             "date": post.date,
         }
         for post in all_posts
     ]
     return jsonify(posts=posts_list), 200
+
+@app.route("/posts/<int:post_id>", methods=["GET"])
+def get_post_by_id(post_id):
+    post = Post.query.get(post_id)
+    if post:
+        post_details = {
+            "id": post.id,
+            "sector": post.sector,
+            "description": post.description,
+            "image1": post.image1,
+            "image2": post.image2 if post.image2 is not None else '',
+            "poster_username": post.poster_username,
+            "date": post.date,
+            "is_still_there": post.is_still_there,
+            "is_no_longer_there": post.is_no_longer_there,
+        }
+        return jsonify(post=post_details), 200
+    else:
+        return jsonify(message="Post not found"), 404
 
 @app.route("/posts", methods=["POST"])
 @jwt_required()
@@ -154,7 +174,7 @@ def get_comments_by_post_id(post_id):
             'post_id': comment.post_id,
             'content': comment.content,
             'poster_username': comment.poster_username,
-            'date': comment.date.strftime("%Y-%m-%d %H:%M:%S")
+            'date': comment.date
         }
         for comment in comments
     ]
